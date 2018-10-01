@@ -49,7 +49,7 @@ arbol.fit(X_desarrollo, y_desarrollo)
 
 # ### K-fold CV 
 
-# In[112]:
+# In[114]:
 
 
 a=[]
@@ -65,7 +65,8 @@ for train, test  in kfold.split(X_desarrollo):
     #pdb.set_trace()        
     #estoy tratando de sacar los NaN que aparecen en los datos al partir, no se porque aparecen pero el fit no funca sino
     if  X_train.isnull().any().any()==True:
-        X_train.dropna(axis='columns',inplace=True)
+        X_train.dropna(axis=0,inplace=True)
+        
         
     arbol.fit(X_train, y_train.astype(int))
     a=append(arbol.score(X=X_test, y=y_test))
