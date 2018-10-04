@@ -7,20 +7,21 @@
 import numpy as np
 import pandas as pd
 import numpy.ma as ma
+import math
 from collections import Counter
 
 
 # In[2]:
 
 
-def construir_arbol(instancias, etiquetas):
+def construir_arbol(instancias, etiquetas, altura_maxima, criterio):
     # ALGORITMO RECURSIVO para construcción de un árbol de decisión binario. 
     
     # Suponemos que estamos parados en la raiz del árbol y tenemos que decidir cómo construirlo. 
-    ganancia, pregunta = encontrar_mejor_atributo_y_corte(instancias, etiquetas)
+    ganancia, pregunta = encontrar_mejor_atributo_y_corte(instancias, etiquetas, criterio)
     
     # Criterio de corte: ¿Hay ganancia?
-    if ganancia == 0:
+    if ganancia == 0 or altura_maxima == 0:
         #  Si no hay ganancia en separar, no separamos. 
         return Hoja(etiquetas)
     else: 
@@ -29,8 +30,8 @@ def construir_arbol(instancias, etiquetas):
         # partir devuelve instancias y etiquetas que caen en cada rama (izquierda y derecha)
 
         # Paso recursivo (consultar con el computador más cercano)
-        sub_arbol_izquierdo = construir_arbol(instancias_cumplen, etiquetas_cumplen)
-        sub_arbol_derecho   = construir_arbol(instancias_no_cumplen, etiquetas_no_cumplen)
+        sub_arbol_izquierdo = construir_arbol(instancias_cumplen, etiquetas_cumplen, altura_maxima - 1, criterio)
+        sub_arbol_derecho   = construir_arbol(instancias_no_cumplen, etiquetas_no_cumplen, altura_maxima - 1, criterio)
         # los pasos anteriores crean todo lo que necesitemos de sub-árbol izquierdo y sub-árbol derecho
         
         # sólo falta conectarlos con un nodo de decisión:
@@ -73,7 +74,25 @@ class Pregunta:
 
 
 # In[4]:
+        
+def entropia(etiquetas):
+    dicc =  dict(Counter(etiquetas));
+    totalEtiquetas = sum(dicc.values())
+    result = 0
+    for etiqueta in dicc.keys():
+        proporcion = dicc[etiqueta]/totalEtiquetas;
+        result = result - proporcion*(math.log(proporcion,2));
+    return result
 
+
+def ganancia_informacion(etiquetas, etiquetas_rama_izquierda, etiquetas_rama_derecha):
+    totalIzquierda = len(etiquetas_rama_izquierda);
+    totalDerecha =  len(etiquetas_rama_derecha)                                  
+    totalEtiquetas = totalIzquierda + totalDerecha;
+    entropiaIzquierdaPonderada = (totalIzquierda/totalEtiquetas)*entropia(etiquetas_rama_izquierda);
+    entropiaDerechaPonderada = (totalDerecha/totalEtiquetas)*entropia(etiquetas_rama_derecha);
+    entropiaInicial = entropia(etiquetas)
+    return entropiaInicial - entropiaIzquierdaPonderada - entropiaDerechaPonderada;
 
 def gini(etiquetas):    
     dicc =  dict(Counter(etiquetas));
@@ -84,24 +103,22 @@ def gini(etiquetas):
     return impureza
 
 def ganancia_gini(etiquetas, etiquetas_rama_izquierda, etiquetas_rama_derecha):
-    giniInicial = gini(etiquetas)
     totalIzquierda = len(etiquetas_rama_izquierda);
     totalDerecha =  len(etiquetas_rama_derecha)                                  
     totalEtiquetas = totalIzquierda + totalDerecha;
     giniIzquierdaPonderado = (totalIzquierda/totalEtiquetas)*gini(etiquetas_rama_izquierda);
     giniDerechaPonderado = (totalDerecha/totalEtiquetas)*gini(etiquetas_rama_derecha);
     giniInical = gini(etiquetas);
-    ganancia_gini = giniInical - giniIzquierdaPonderado - giniDerechaPonderado;
-    return ganancia_gini
+    return giniInical - giniIzquierdaPonderado - giniDerechaPonderado;
 
 
 def partir_segun(pregunta, instancias, etiquetas):
     # Esta función debe separar instancias y etiquetas según si cada instancia cumple o no con la pregunta (ver método 'cumple')
     # COMPLETAR (recomendamos utilizar máscaras para este punto) 
     mascaraCumplen = instancias.dropna().apply(lambda x: pregunta.cumple(x), axis=1)
-    instancias_cumplen = instancias.dropna().mask(-mascaraCumplen);
+    instancias_cumplen = instancias.dropna().mask(~mascaraCumplen);
     instancias_no_cumplen = instancias.dropna().mask(mascaraCumplen);
-    etiquetas_cumplen = ma.array(etiquetas, mask = -mascaraCumplen).compressed();
+    etiquetas_cumplen = ma.array(etiquetas, mask = ~mascaraCumplen).compressed();
     etiquetas_no_cumplen = ma.array(etiquetas, mask = mascaraCumplen).compressed();
     
     return instancias_cumplen, etiquetas_cumplen, instancias_no_cumplen, etiquetas_no_cumplen
@@ -110,7 +127,7 @@ def partir_segun(pregunta, instancias, etiquetas):
 # In[5]:
 
 
-def encontrar_mejor_atributo_y_corte(instancias, etiquetas):
+def encontrar_mejor_atributo_y_corte(instancias, etiquetas, criterio):
     max_ganancia = 0
     mejor_pregunta = None
     for columna in instancias.columns:
@@ -119,7 +136,10 @@ def encontrar_mejor_atributo_y_corte(instancias, etiquetas):
             pregunta = Pregunta(columna, valor)
             _, etiquetas_rama_izquierda, _, etiquetas_rama_derecha = partir_segun(pregunta, instancias, etiquetas)
    
-            ganancia = ganancia_gini(etiquetas, etiquetas_rama_izquierda, etiquetas_rama_derecha)
+            if(criterio == 'entropy'):
+                ganancia = ganancia_informacion(etiquetas, etiquetas_rama_izquierda, etiquetas_rama_derecha)
+            else:
+                ganancia = ganancia_gini(etiquetas, etiquetas_rama_izquierda, etiquetas_rama_derecha)
             
             if ganancia > max_ganancia:
                 max_ganancia = ganancia
@@ -167,10 +187,10 @@ display(X)
 display(y)
 
 
-# In[7]:
+# In[ ]:
 
 
-arbol = construir_arbol(X, y)
+arbol = construir_arbol(X, y,5,"entropy")
 imprimir_arbol(arbol)
 
 
@@ -216,7 +236,7 @@ imprimir_arbol(arbol)
 # Protocolo sklearn para clasificadores. Completar el protocolo requerido por sklearn. Deben completar la función predict utilizando el árbol para predecir valores de nuevas instancias. 
 # 
 
-# In[8]:
+# In[ ]:
 
 
 def predecir(arbol, x_t):
@@ -229,15 +249,15 @@ def predecir(arbol, x_t):
         else:
             return predecir(arbol.sub_arbol_derecho, x_t);
         
-    return "Si"
-        
 class MiClasificadorArbol(): 
-    def __init__(self):
+    def __init__(self, max_depth, criterion):
         self.arbol = None
-        self.columnas = ['Cielo', 'Temperatura', 'Humedad', 'Viento']
+        self.altura_maxima = max_depth
+        self.criterio = criterion
     
     def fit(self, X_train, y_train):
-        self.arbol = construir_arbol(pd.DataFrame(X_train, columns=self.columnas), y_train)
+        self.columnas = np.arange(len(X_train[0]))
+        self.arbol = construir_arbol(pd.DataFrame(X_train, columns=self.columnas), y_train, self.altura_maxima, self.criterio)
         return self
     
     def predict(self, X_test):
@@ -257,7 +277,7 @@ class MiClasificadorArbol():
         
 
 # Ejemplo de uso
-clf = MiClasificadorArbol()
+clf = MiClasificadorArbol(5, "entropy")
 
 # Tomar en cuenta que sklearn espera numpy arrays:
 clf.fit(np.array(X), y)
