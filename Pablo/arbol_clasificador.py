@@ -101,9 +101,9 @@ def buildColumnValues(X):
         col = np.sort(X[0:,i]) 
         j = 0
         result[i] = []
-        while j + 49 < len(col) - 1:
-            result[i].append((col[j],col[j+49]))
-            j = j + 50
+        while j + 99 < len(col) - 1:
+            result[i].append((col[j],col[j+99]))
+            j = j + 100
     return result
 
 def predecir(arbol, x_t):
@@ -116,6 +116,22 @@ def predecir(arbol, x_t):
         else:
             return predecir(arbol.sub_arbol_derecho, x_t);
         
+   
+def predecirProbabilidadEqualTo1(arbol, x_t):
+    if isinstance(arbol, Hoja):
+        total = sum(arbol.cuentas.values());
+        if 1 in arbol.cuentas:
+            return arbol.cuentas[1]/total
+        else:
+            return 0
+        
+    else:
+        if arbol.pregunta.cumple(x_t):
+            return predecirProbabilidadEqualTo1(arbol.sub_arbol_izquierdo, x_t);
+        else:
+            return predecirProbabilidadEqualTo1(arbol.sub_arbol_derecho, x_t);     
+        
+        
 class MiClasificadorArbol(): 
     def __init__(self, max_depth, criterion):
         self.arbol = None
@@ -126,19 +142,25 @@ class MiClasificadorArbol():
         self.columnas = np.arange(X_train.shape[1])
         self.columnValues = buildColumnValues(X_train.values);
         self.etiquetasSet = set(y_train);
-        self.arbol = self.construir_arbol(X_train, y_train, self.altura_maxima, self.criterio)
+        self.arbol = self.construir_arbol(X_train.values, y_train, self.altura_maxima, self.criterio)
         return self
+    
+    def predictValue(self, X_test):
+        predictions = []
+        for x_t in X_test.values:
+            prediction = predecir(self.arbol, x_t)
+            predictions.append(prediction)
+        return predictions
     
     def predict(self, X_test):
         predictions = []
         for x_t in X_test.values:
-            x_t_df = pd.DataFrame([x_t], columns=self.columnas).iloc[0]
-            prediction = predecir(self.arbol, x_t_df)
+            prediction = predecirProbabilidadEqualTo1(self.arbol, x_t)
             predictions.append(prediction)
-        return predictions
+        return predictions    
     
     def score(self, X, y):
-        y_pred = self.predict(X)
+        y_pred = self.predictValue(X)
         
         accuracy = sum(y_i == y_j for (y_i, y_j) in zip(y_pred, y)) / len(y)
         return accuracy
@@ -157,10 +179,15 @@ class MiClasificadorArbol():
             # Si hay ganancia en partir el conjunto en 2
             instancias_cumplen, etiquetas_cumplen, instancias_no_cumplen, etiquetas_no_cumplen = partir_segun(pregunta, instancias, etiquetas)
             # partir devuelve instancias y etiquetas que caen en cada rama (izquierda y derecha)
+            
+            if isinstance(altura_maxima, int):
+                proxima_altura_maxima = altura_maxima - 1
+            else:
+                proxima_altura_maxima = None
     
             # Paso recursivo (consultar con el computador más cercano)
-            sub_arbol_izquierdo = self.construir_arbol(instancias_cumplen, etiquetas_cumplen, altura_maxima - 1, criterio)
-            sub_arbol_derecho   = self.construir_arbol(instancias_no_cumplen, etiquetas_no_cumplen, altura_maxima - 1, criterio)
+            sub_arbol_izquierdo = self.construir_arbol(instancias_cumplen, etiquetas_cumplen, proxima_altura_maxima, criterio)
+            sub_arbol_derecho   = self.construir_arbol(instancias_no_cumplen, etiquetas_no_cumplen, proxima_altura_maxima, criterio)
             # los pasos anteriores crean todo lo que necesitemos de sub-árbol izquierdo y sub-árbol derecho
             
             # sólo falta conectarlos con un nodo de decisión:
@@ -191,9 +218,6 @@ class MiClasificadorArbol():
             dicc = dict(Counter(etiquetas.compressed()));
         else:
             dicc =  dict(Counter(etiquetas));
-            
-        
-        
         totalEtiquetas = sum(dicc.values())
         result = 0
         for etiqueta in dicc.keys():
@@ -203,8 +227,12 @@ class MiClasificadorArbol():
     
     
     def ganancia_informacion(self, etiquetas, etiquetas_rama_izquierda, etiquetas_rama_derecha):
-        totalIzquierda = len(etiquetas_rama_izquierda);
-        totalDerecha =  len(etiquetas_rama_derecha)                                  
+#        print("rama izquierda")
+#        print(etiquetas_rama_izquierda)
+#        print("rama derecha")
+#        print(etiquetas_rama_derecha)
+        totalIzquierda = etiquetas_rama_izquierda.count()
+        totalDerecha =  etiquetas_rama_derecha.count()                                  
         totalEtiquetas = totalIzquierda + totalDerecha;
         entropiaIzquierdaPonderada = (totalIzquierda/totalEtiquetas)*self.entropia(etiquetas_rama_izquierda);
         entropiaDerechaPonderada = (totalDerecha/totalEtiquetas)*self.entropia(etiquetas_rama_derecha);
@@ -224,8 +252,8 @@ class MiClasificadorArbol():
         return impureza
     
     def ganancia_gini(self, etiquetas, etiquetas_rama_izquierda, etiquetas_rama_derecha):
-        totalIzquierda = len(etiquetas_rama_izquierda);
-        totalDerecha =  len(etiquetas_rama_derecha)                                  
+        totalIzquierda = etiquetas_rama_izquierda.count()
+        totalDerecha =  etiquetas_rama_derecha.count()                                 
         totalEtiquetas = totalIzquierda + totalDerecha;
         giniIzquierdaPonderado = (totalIzquierda/totalEtiquetas)*self.gini(etiquetas_rama_izquierda);
         giniDerechaPonderado = (totalDerecha/totalEtiquetas)*self.gini(etiquetas_rama_derecha);
