@@ -117,19 +117,20 @@ def predecir(arbol, x_t):
             return predecir(arbol.sub_arbol_derecho, x_t);
         
    
-def predecirProbabilidadEqualTo1(arbol, x_t):
+def predictProbabilities(arbol, x_t):
     if isinstance(arbol, Hoja):
         total = sum(arbol.cuentas.values());
         if 1 in arbol.cuentas:
-            return arbol.cuentas[1]/total
+           probabilityEqualTo1 = arbol.cuentas[1]/total;
+           return np.array([1-probabilityEqualTo1,probabilityEqualTo1]);
         else:
-            return 0
+            return np.array([1,0]);
         
     else:
         if arbol.pregunta.cumple(x_t):
-            return predecirProbabilidadEqualTo1(arbol.sub_arbol_izquierdo, x_t);
+            return predictProbabilities(arbol.sub_arbol_izquierdo, x_t);
         else:
-            return predecirProbabilidadEqualTo1(arbol.sub_arbol_derecho, x_t);     
+            return predictProbabilities(arbol.sub_arbol_derecho, x_t);     
         
         
 class MiClasificadorArbol(): 
@@ -152,12 +153,12 @@ class MiClasificadorArbol():
             predictions.append(prediction)
         return predictions
     
-    def predict(self, X_test):
+    def predict_proba(self, X_test):
         predictions = []
         for x_t in X_test.values:
-            prediction = predecirProbabilidadEqualTo1(self.arbol, x_t)
+            prediction = predictProbabilities(self.arbol, x_t)
             predictions.append(prediction)
-        return predictions    
+        return np.array(predictions)    
     
     def score(self, X, y):
         y_pred = self.predictValue(X)
